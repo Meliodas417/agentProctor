@@ -1,0 +1,8 @@
+{"ts": "2026-11-05T11:50:14.129-07:00", "source": "collector", "text": "start run ps-codex53-03; serial globs=['/var/log/libvirt/qemu/*serial*.log', '/var/log/sandbox-serial/*.log', '/users/junr/collector/serial/*.log']; console_dir=/users/junr/collector/serial; domain_filter=''"}
+{"ts": "2026-11-05T11:50:24.440-07:00", "source": "libvirt", "domain": "a72834e1_default-a72834e1", "event": "lifecycle", "detail": "Defined Added", "severity": "info"}
+{"ts": "2026-11-05T11:50:26.642-07:00", "source": "libvirt", "domain": "a72834e1_default-a72834e1", "event": "lifecycle", "detail": "Resumed Unpaused", "severity": "info"}
+{"ts": "2026-11-05T11:50:26.643-07:00", "source": "collector", "domain": "a72834e1_default-a72834e1", "text": "attached serial console -> /users/junr/collector/serial/a72834e1_default-a72834e1.log"}
+{"ts": "2026-11-05T11:50:26.644-07:00", "source": "libvirt", "domain": "a72834e1_default-a72834e1", "event": "lifecycle", "detail": "Started Booted", "severity": "info"}
+{"ts": "2026-11-05T12:07:14.422-07:00", "source": "libvirt", "domain": "a72834e1_default-a72834e1", "event": "lifecycle", "detail": "Shutdown Finished after host request", "severity": "info"}
+{"ts": "2026-11-05T12:07:14.633-07:00", "source": "libvirt", "domain": "a72834e1_default-a72834e1", "event": "lifecycle", "detail": "Stopped Destroyed", "severity": "trigger"}
+{"ts": "2026-11-05T12:07:14.644-07:00", "source": "libvirt", "domain": "a72834e1_default-a72834e1", "event": "lifecycle", "detail": "Undefined Removed", "severity": "info"}

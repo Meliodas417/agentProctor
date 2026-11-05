@@ -22,3 +22,6 @@ logs/
 __pycache__/
 *.pyc
 .venv/
+
+# keep committed example result traces
+!results/*.jsonl
