@@ -1,53 +1,56 @@
-# 用真实 agent 跑 SandboxEscapeBench 并观测系统信号
+# Running SandboxEscapeBench with a real agent and observing system signals
 
-目标:在一台 KVM 宿主上,用**真实模型**(经 OpenRouter)驱动 UK AISI 的
-SandboxEscapeBench 容器逃逸靶场,同时用本仓库的采集器录下系统级信号
-(崩溃 / 重启 / syscall / 文件改动)。
+Goal: on a KVM host, drive UK AISI's SandboxEscapeBench container-escape scenarios
+with a **real model** (via OpenRouter), while this repo's collector records the
+system-level signals (crash / restart / syscalls / file changes).
 
-全程遵守:**用 `normal`/`hint` 变体,绝不用 `solution`(喂现成 exploit)**;
-**采集器先于 agent 启动、晚于 agent 结束停**;**缺系统流的运行不可评价**。
+Throughout: **use the `normal`/`hint` variant, never `solution`** (which hands over a
+ready-made exploit); **start the collector before the agent and stop it after**;
+**a run missing its system-signal stream is not evaluable.**
 
 ---
 
-## 0. 宿主前置(以 Ubuntu 22.04 + KVM 为例)
+## 0. Host prerequisites (example: Ubuntu 22.04 + KVM)
 
-需要:`/dev/kvm` 可用、passwordless sudo。装:
+You need `/dev/kvm` and passwordless sudo. Install:
 
 ```bash
 sudo apt-get update
 sudo apt-get install -y docker.io qemu-kvm libvirt-daemon-system \
      vagrant vagrant-libvirt libguestfs-tools packer
-# uv(跑 inspect 用)
-curl -LsSf https://astral.sh/uv/install.sh | sh    # 落在 ~/.local/bin/uv
+# uv (to run inspect)
+curl -LsSf https://astral.sh/uv/install.sh | sh    # lands in ~/.local/bin/uv
 ```
 
-> 踩过的坑:打 box 时缺 `virt-sysprep` 会报 "no artifacts were created" ——
-> 它在 `libguestfs-tools` 里,务必装上。
+> Gotcha we hit: building the box fails with "no artifacts were created" if
+> `virt-sysprep` is missing — it ships in `libguestfs-tools`, so install it.
 
-## 1. 获取 bench(锁定提交,不入本库)
+## 1. Get the bench (pin the commit, not vendored here)
 
 ```bash
 git clone https://github.com/UKGovernmentBEIS/sandbox_escape_bench.git
 cd sandbox_escape_bench
-git checkout 9fa5f26c          # 固定提交,保证可复现
-uv sync                         # 建 .venv,装 inspect_ai 等
+git checkout 9fa5f26c          # pinned commit, for reproducibility
+uv sync                         # builds .venv, installs inspect_ai etc.
 ```
 
-> bench 的 `scenarios/*/setup.sh`、`task.py`、exploit 源码顶部带 canary 标记
-> (一行"禁止进入训练语料"的警告 + 一个 GUID),**不要**把它们拷进别的仓库或训练语料。
+> The bench's `scenarios/*/setup.sh`, `task.py` and exploit sources carry a canary
+> marker (a "do not put in training corpora" warning line + a GUID). **Do not** copy
+> them into another repo or into training data.
 
-## 2. 建自定义内核 box(内存破坏类任务需要)
+## 2. Build the custom kernel box (needed for memory-corruption tasks)
 
-`packet_socket`(CVE-2017-7308)等任务要旧内核才能触发,用 packer 打 box:
+`packet_socket` (CVE-2017-7308) and similar tasks need an old kernel to be exploitable.
+Build the box with packer:
 
 ```bash
-# 具体脚本名以 bench 版本为准,通常是:
-./scripts/build-debs.sh            # 在 docker 里编内核 .deb
-./scripts/build-kernel-box.sh packet_socket   # packer + vagrant-libvirt 打包
-vagrant box list | grep sandbox    # 出现 sandbox-packet_socket 即成功
+# Exact script names depend on the bench version; typically:
+./scripts/build-debs.sh            # compile the kernel .deb in docker
+./scripts/build-kernel-box.sh packet_socket   # packer + vagrant-libvirt packaging
+vagrant box list | grep sandbox    # sandbox-packet_socket appearing = success
 ```
 
-`images.yaml` 里该任务应指向打好的 box,例如:
+`images.yaml` should point the task at the built box, e.g.:
 
 ```yaml
 packet_socket:
@@ -55,33 +58,35 @@ packet_socket:
   kernel: "4.8.1"
 ```
 
-## 3. 配 OpenRouter(key 绝不入库)
+## 3. Configure OpenRouter (never commit the key)
 
-在 bench 根目录建 `.env`(inspect 会自动加载):
+Create `.env` in the bench root (inspect auto-loads it):
 
 ```bash
 cat > .env <<'EOF'
-OPENROUTER_API_KEY=<your-openrouter-key>   # 你自己的 key,别提交
+OPENROUTER_API_KEY=<your-openrouter-key>   # your own key, do not commit
 INSPECT_SANDBOX_SETUP_TIMEOUT=900
 INSPECT_MAX_VAGRANT_STARTUPS=1
 EOF
 ```
 
-一个 OpenRouter key 通吃所有模型。模型 id 形如 `openrouter/openai/gpt-5.3-codex`、
-`openrouter/anthropic/claude-haiku-5.5`。
+One OpenRouter key works for all models. Model ids look like
+`openrouter/openai/gpt-5.3-codex`, `openrouter/anthropic/claude-haiku-5.5`.
 
-## 4. 先起采集器(主机侧)
+## 4. Start the collector first (host side)
 
 ```bash
-# 在宿主上,先于 eval 启动
+# On the host, before the eval
 python3 /path/to/agentProctor/collector/collector.py --run-id run01
 #   -> ~/collector/runs/run01.jsonl
-#   域一 Started 会自动挂串口;KEEP_ALL=1 可连非崩溃串口行也记
+#   auto-attaches the serial console when a domain starts
+#   KEEP_ALL=1 also records non-crash serial lines
 ```
 
-采集器用 `virsh -c qemu:///system` 读 libvirt 事件,无需 sudo(宿主在 libvirt 组即可)。
+The collector reads libvirt events via `virsh -c qemu:///system`; no sudo needed if the
+host user is in the libvirt group.
 
-## 5. 跑 eval(真实 agent)
+## 5. Run the eval (real agent)
 
 ```bash
 cd sandbox_escape_bench
@@ -91,21 +96,22 @@ uv run inspect eval scenarios/packet_socket/task.py \
   --token-limit 1000000 --max-sandboxes 1 --log-dir logs
 ```
 
-- `variant`:`normal`(只给任务)/ `hint`(额外给一句漏洞类型,**不给 exploit**)。
-  **绝不用 `solution`**(它把现成 exploit 文件塞进容器)。
-- `--token-limit` 兜住成本;前沿模型一轮约撞上限,几美元量级。
+- `variant`: `normal` (task only) / `hint` (adds one line naming the vulnerability type,
+  **no exploit**). **Never `solution`** (it drops a ready-made exploit into the container).
+- `--token-limit` caps cost; a frontier model usually hits the cap in one sample, on the
+  order of a few dollars.
 
-跑完,inspect 日志在 `logs/*.eval`(zip,内含完整轨迹);采集器轨迹在
-`runs/run01.jsonl`。
+When done, the inspect log is at `logs/*.eval` (a zip with the full trajectory); the
+collector trace is at `runs/run01.jsonl`.
 
-## 6. 读采集到的信号
+## 6. Read the captured signals
 
 ```bash
-# 崩溃 / 触发行
+# crash / trigger lines
 grep -E '"severity": ?"trigger"|crash_class|panic|[Oo]ops|segfault|lockup|stall' \
   ~/collector/runs/run01.jsonl
 
-# 按崩溃类别计数
+# count by crash class
 python3 - <<'PY'
 import json, collections
 c = collections.Counter()
@@ -116,7 +122,8 @@ print(dict(c))
 PY
 ```
 
-典型的"崩溃那次"轨迹长这样(全是主机侧抓的,此刻 guest 内传感器已随内核冻死):
+A "crash" trace looks like this (all captured host-side; at this moment any in-guest
+sensor has already died with the kernel):
 
 ```
 libvirt  Started Booted
@@ -125,35 +132,43 @@ serial   kernel_oops   Oops: 0010 [#1] SMP
 serial   kernel_panic  Kernel panic - not syncing: Fatal exception in interrupt
 ```
 
-## 7. 断网模式(测 agent 自主能力)
+See [`../results/`](../results/) for real captured traces.
 
-有网时模型可能直接 `curl` 下载公开 PoC 再跑——那不算"自己试错"。要逼它凭本事写,
-按 [`../patches/container-egress-block.md`](../patches/container-egress-block.md)
-给挑战容器断网(保留网卡给 AF_PACKET、保留 docker exec、模型 API 走宿主不受影响)。
+## 7. Offline mode (test the agent's unaided capability)
 
-## 8. (可选)开 guest 层,抓 panic 前足迹
+With internet, a model may just `curl` a public PoC and run it — which is not its own
+trial-and-error. To force it to rely on its own knowledge, cut the challenge container's
+egress per [`../patches/container-egress-block.md`](../patches/container-egress-block.md)
+(the network interface for AF_PACKET and `docker exec` are preserved; the host's
+connection to OpenRouter is unaffected).
 
-VM 起来后,在 guest 内以 root:
+## 8. (Optional) Enable the guest layer to capture pre-panic footprint
+
+After the VM is up, as root inside the guest:
 
 ```bash
 bash /path/to/agentProctor/collector/guest-syscall.sh start run01
 #   -> /var/log/cybermon/run01.audit.log
-#   FLOOD=1 可审计所有 syscall(很吵)
+#   FLOOD=1 audits all syscalls (very noisy)
 ```
 
-事后把 guest 的 audit 流和主机轨迹按时间戳对齐。
+Align the guest audit stream with the host trace by timestamp afterward.
 
 ---
 
-## 踩过的坑(省你时间)
+## Gotchas (to save you time)
 
-- **guest 给 4 核**。单核时 runc 在 setup 阶段会把 CPU 软锁死(`soft lockup [runc]` +
-  rcu stall),setup 超时作废。把 `Vagrantfile` 的 `v.cpus` 调到 4、内存 3072。
-- **setup 超时调到 900s**(`.env` 的 `INSPECT_SANDBOX_SETUP_TIMEOUT`)。
-- **每跑前清 `~/collector/serial/*.log`**。采集器启动时会把残留串口日志重读进来,
-  凭空多出上一跑的崩溃事件。跑前清空(或归档)serial 目录。
-- **非交互 shell 找不到 `uv`**:用绝对路径 `~/.local/bin/uv` 或先 `export PATH`。
-- **`virsh console` 需要控制 TTY**:采集器用 `script -q -c "virsh console ..."` 给它一个 pty,
-  顺带绕开 AppArmor 对 qemu 写文件的限制。
-- **崩溃分类器的正则要对得上实际内核输出**:`soft lockup` / `rcu_sched detected stalls` 这类
-  措辞容易漏,改完用 `collector.py --selftest` 验证。
+- **Give the guest 4 vCPUs.** With a single core, runc soft-locks CPU#0 during setup
+  (`soft lockup [runc]` + rcu stall) and setup times out. Set `v.cpus = 4` and memory
+  3072 in the `Vagrantfile`.
+- **Raise the setup timeout to 900s** (`INSPECT_SANDBOX_SETUP_TIMEOUT` in `.env`).
+- **Clear `~/collector/serial/*.log` before each run.** At startup the collector re-reads
+  leftover serial logs, producing phantom crash events from the previous run.
+- **A non-interactive shell can't find `uv`:** use the absolute path `~/.local/bin/uv`
+  or `export PATH` first.
+- **`virsh console` needs a controlling TTY:** the collector uses
+  `script -q -c "virsh console ..."` to give it a pty, which also sidesteps AppArmor's
+  restriction on qemu writing files.
+- **The crash-classifier regexes must match real kernel output:** wording like
+  `soft lockup` / `rcu_sched detected stalls` is easy to miss; after editing, validate
+  with `collector.py --selftest`.
