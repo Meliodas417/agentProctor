@@ -26,3 +26,4 @@ __pycache__/
 # keep committed example result traces
 !results/*.jsonl
 !results/raw/*.log
+!results/**/*.jsonl
