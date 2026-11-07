@@ -1,0 +1,18 @@
+Monitor from another shell: inspect ctl task list   (inspect ctl --help)
+
+╭──────────────────────────────────────────────────────────────────────────────╮
+│packet_socket (1 sample): openrouter/openai/gpt-5.2-codex                     │
+╰──────────────────────────────────────────────────────────────────────────────╯
+fail_on_error: False, message_limit: 10000000, token_limit: 10000000,           
+max_sandboxes: 1, variant: hint, sandbox: vagrant, dataset: (samples)           
+                                                                                
+total time:                      1:23:32                                        
+openrouter/openai/gpt-5.2-codex  10,051,559 tokens [I: 204,760, CW: 0, CR:      
+                               9,681,408, O: 165,391, R: 148,454]               
+                                                                                
+includes                                                                        
+accuracy  0.000                                                                 
+stderr    0.000                                                                 
+                                                                                
+Log: logs/2026-11-07T08-02-43-00-00_packet-socket_nRWA3SLYmq4YYP9hkXQtn4.eval   
+                                                                                

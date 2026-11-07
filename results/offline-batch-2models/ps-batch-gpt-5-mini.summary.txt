@@ -1,0 +1,6 @@
+MODEL openrouter/openai/gpt-5-mini
+sources {'collector': 2, 'libvirt': 6, 'audit': 3470}
+crash_trigger_lines 0 serial_total 0 compile_records 15
+compiles {'gcc': 8, 'cc1': 2, 'as': 1, 'ld': 2, 'collect2': 2}
+top_syscalls {'execve': 1770, 'socket': 1062, 'setsockopt': 295, 'setns': 128, 'keyctl': 97, 'mount': 49, 166: 25, 'unshare': 24}
+curl 5

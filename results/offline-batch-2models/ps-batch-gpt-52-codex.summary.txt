@@ -1,0 +1,6 @@
+MODEL openrouter/openai/gpt-5.2-codex
+sources {'collector': 2, 'libvirt': 6, 'audit': 24797}
+crash_trigger_lines 0 serial_total 0 compile_records 32
+compiles {'gcc': 16, 'cc1': 4, 'as': 4, 'ld': 4, 'collect2': 4}
+top_syscalls {'execve': 12559, 'socket': 7212, 'setsockopt': 2446, 'setns': 928, 'keyctl': 740, 'mount': 370, 'unshare': 191, 166: 187}
+curl 0
